@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const baseURL = import.meta.env.VITE_API_URL || 'https://smart-event-management-system-1-f2en.onrender.com'
 
 const api = axios.create({
   baseURL,
