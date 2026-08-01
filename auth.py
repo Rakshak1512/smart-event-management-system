@@ -1,84 +1,66 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app.config import settings
 from app.database import get_db
-from app.auth import (
-    get_password_hash,
-    verify_password,
-    create_access_token,
-    get_current_user,
-)
+from app import models
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
-@router.post("/register", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
-def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == payload.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
-    user = models.User(
-        name=payload.name,
-        email=payload.email,
-        hashed_password=get_password_hash(payload.password),
-        role=payload.role,
-        department=payload.department,
-        student_id=payload.student_id,
-        phone=payload.phone,
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    return {"access_token": token, "user": user}
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-@router.post("/login", response_model=schemas.Token)
-def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> models.User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    return {"access_token": token, "user": user}
-
-
-@router.get("/me", response_model=schemas.UserOut)
-def me(current_user: models.User = Depends(get_current_user)):
-    return current_user
-
-
-@router.put("/me", response_model=schemas.UserOut)
-def update_me(
-    payload: schemas.UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(current_user, field, value)
-
-    db.commit()
-    db.refresh(current_user)
-    return current_user
+    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
 
-# -----------------------------
-# TEMPORARY DEBUG ENDPOINT
-# Remove after testing
-# -----------------------------
-@router.get("/debug-db")
-def debug_db(db: Session = Depends(get_db)):
-    database_name = db.execute(text("SELECT current_database()")).scalar()
+def require_role(*roles: str):
+    def dependency(current_user: models.User = Depends(get_current_user)):
+        if current_user.role.value not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action",
+            )
+        return current_user
 
-    user_count = db.query(models.User).count()
-
-    return {
-        "database": database_name,
-        "users_in_database": user_count
-    }
+    return dependency
