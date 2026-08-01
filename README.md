@@ -1,7 +1,7 @@
 # Smart Event Management System
 
 A complete, production-ready full-stack platform for managing college events —
-built with **FastAPI + MySQL** on the backend and **React (Vite) + Tailwind CSS**
+built with **FastAPI + PostgreSQL** on the backend and **React (Vite) + Tailwind CSS**
 on the frontend.
 
 Students can discover, search, and register for events, track their
@@ -15,8 +15,8 @@ dashboard.
 ## Tech Stack
 
 **Frontend:** React (Vite), Tailwind CSS, React Router, Framer Motion, Axios, Recharts
-**Backend:** FastAPI, SQLAlchemy, JWT Authentication, Alembic, PyMySQL
-**Database:** MySQL
+**Backend:** FastAPI, SQLAlchemy, JWT Authentication, Alembic, psycopg
+**Database:** PostgreSQL
 
 ---
 
@@ -66,16 +66,16 @@ Smart-Event-Management-System/
 
 ---
 
-## 1. MySQL Setup
+## 1. PostgreSQL Setup
 
-Install MySQL locally (or use a hosted instance), then create the database:
+Install PostgreSQL locally (or use a hosted instance), then create the database:
 
 ```sql
 CREATE DATABASE smart_event_db;
 ```
 
-Make sure a MySQL user (e.g. `root`) has access to it. You'll reference this
-in the backend `.env` file in the next step.
+Make sure a PostgreSQL user has access to it. You'll reference this in the
+backend `.env` file in the next step.
 
 ---
 
@@ -100,7 +100,7 @@ cp .env.example .env
 
 `.env`:
 ```
-DATABASE_URL=mysql+pymysql://root:password@localhost/smart_event_db
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/smart_event_db
 SECRET_KEY=change_this_to_a_long_random_secret_key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
@@ -161,7 +161,7 @@ frontend and backend talk to each other out of the box during development.
 **backend/.env**
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | SQLAlchemy MySQL connection string |
+| `DATABASE_URL` | SQLAlchemy PostgreSQL connection string |
 | `SECRET_KEY` | Secret used to sign JWT tokens — change this in production |
 | `ALGORITHM` | JWT signing algorithm (default `HS256`) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token lifetime in minutes |
@@ -176,7 +176,7 @@ frontend and backend talk to each other out of the box during development.
 
 ## 5. Running the Full Project
 
-1. Start MySQL and create `smart_event_db`.
+1. Start PostgreSQL and create `smart_event_db`.
 2. Terminal 1: `cd backend && uvicorn app.main:app --reload`
 3. Terminal 2: `cd frontend && npm run dev`
 4. Visit `http://localhost:5173`, sign in with the seeded demo accounts, or register a new account.
@@ -207,7 +207,7 @@ frontend and backend talk to each other out of the box during development.
 - **Backend:** Deploy the FastAPI app with `uvicorn`/`gunicorn` behind a reverse
   proxy (e.g. Nginx) on any VM, or containerize with Docker and deploy to a
   service like Render, Railway, or AWS ECS. Point `DATABASE_URL` at a managed
-  MySQL instance (e.g. AWS RDS, PlanetScale-compatible MySQL, etc.).
+  PostgreSQL instance (e.g. Render Postgres, AWS RDS, Neon, etc.).
 - **Frontend:** Run `npm run build` inside `frontend/` to produce a static
   `dist/` folder, then deploy it to Vercel, Netlify, or any static host. Set
   `VITE_API_URL` to your deployed backend's public URL at build time.
