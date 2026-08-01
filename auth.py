@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -28,6 +29,7 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         student_id=payload.student_id,
         phone=payload.phone,
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -39,6 +41,7 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=schemas.Token)
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == payload.email).first()
+
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -59,6 +62,23 @@ def update_me(
 ):
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(current_user, field, value)
+
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+# -----------------------------
+# TEMPORARY DEBUG ENDPOINT
+# Remove after testing
+# -----------------------------
+@router.get("/debug-db")
+def debug_db(db: Session = Depends(get_db)):
+    database_name = db.execute(text("SELECT current_database()")).scalar()
+
+    user_count = db.query(models.User).count()
+
+    return {
+        "database": database_name,
+        "users_in_database": user_count
+    }
