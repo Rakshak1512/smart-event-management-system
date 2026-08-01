@@ -15,9 +15,32 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
 def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == payload.email).first()
+    print("=" * 80)
+    print("REGISTER REQUEST")
+    print("DATABASE URL:", db.bind.url)
+    print("EMAIL:", payload.email)
+
+    try:
+        all_users = db.query(models.User).all()
+        print("TOTAL USERS:", len(all_users))
+        print("USERS:", [u.email for u in all_users])
+    except Exception as e:
+        print("ERROR READING USERS:", str(e))
+
+    existing = (
+        db.query(models.User)
+        .filter(models.User.email == payload.email)
+        .first()
+    )
+
+    print("EXISTING USER:", existing)
+
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        print("USER ALREADY EXISTS")
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
 
     user = models.User(
         name=payload.name,
@@ -28,22 +51,72 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         student_id=payload.student_id,
         phone=payload.phone,
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    return {"access_token": token, "user": user}
+    print("NEW USER CREATED:", user.email)
+    print("=" * 80)
+
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "role": user.role.value,
+        }
+    )
+
+    return {
+        "access_token": token,
+        "user": user,
+    }
 
 
 @router.post("/login", response_model=schemas.Token)
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    print("=" * 80)
+    print("LOGIN REQUEST")
+    print("DATABASE URL:", db.bind.url)
+    print("EMAIL:", payload.email)
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    return {"access_token": token, "user": user}
+    user = (
+        db.query(models.User)
+        .filter(models.User.email == payload.email)
+        .first()
+    )
+
+    print("FOUND USER:", user)
+
+    if not user:
+        print("USER NOT FOUND")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    password_ok = verify_password(payload.password, user.hashed_password)
+    print("PASSWORD VALID:", password_ok)
+
+    if not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "role": user.role.value,
+        }
+    )
+
+    print("LOGIN SUCCESS")
+    print("=" * 80)
+
+    return {
+        "access_token": token,
+        "user": user,
+    }
 
 
 @router.get("/me", response_model=schemas.UserOut)
@@ -59,6 +132,8 @@ def update_me(
 ):
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(current_user, field, value)
+
     db.commit()
     db.refresh(current_user)
+
     return current_user
